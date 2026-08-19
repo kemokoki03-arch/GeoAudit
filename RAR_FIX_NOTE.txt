@@ -1,0 +1,6 @@
+GeoAudit V32 - RAR Auto Fix
+
+- RAR5 support is bootstrapped automatically on Windows the first time a RAR is imported.
+- GeoAudit downloads the official RARLAB UnRAR package into the persistent GeoAuditStudio Tools folder and reuses it later.
+- Malformed Shapefile sidecar names such as "poly.shp .dbf" are normalized automatically before import.
+- No manual 7-Zip/WinRAR installation is required if the automatic download succeeds.

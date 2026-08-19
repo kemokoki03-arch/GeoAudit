@@ -23,8 +23,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SUPPORTED_EXTS = {'.shp','.shx','.dbf','.prj','.cpg','.xlsx','.xls','.csv','.geojson','.json'}
-GITHUB_APP_URL = 'https://kemokoki03-arch.github.io/GeoAudit/'
-BRIDGE_PORT = 64819
 MAX_UPLOAD = 300 * 1024 * 1024
 TARGET_SITE = 'https://www.landsurvey-eg.com:2410/'
 TARGET_HOST_TOKEN = 'landsurvey-eg.com'
@@ -1818,17 +1816,7 @@ class GeoAuditHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs): super().__init__(*args,directory=str(ROOT),**kwargs)
     def log_message(self,fmt,*args): print(f'[GeoAudit] {self.address_string()} - {fmt % args}')
     def end_headers(self):
-        self.send_header('Cache-Control','no-store, no-cache, must-revalidate')
-        self.send_header('Pragma','no-cache')
-        self.send_header('Access-Control-Allow-Origin','*')
-        self.send_header('Access-Control-Allow-Methods','GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers','Content-Type, X-Requested-With')
-        self.send_header('Access-Control-Expose-Headers','X-GeoAudit-Filename, X-GeoAudit-Extractor')
-        super().end_headers()
-
-    def do_OPTIONS(self):
-        self.send_response(204)
-        self.end_headers()
+        self.send_header('Cache-Control','no-store, no-cache, must-revalidate'); self.send_header('Pragma','no-cache'); super().end_headers()
 
     def json_response(self, code, obj):
         data=json.dumps(obj, ensure_ascii=False).encode('utf-8')
@@ -1934,20 +1922,21 @@ class GeoAuditHandler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     initialize_download_watch()
-    try: server=http.server.ThreadingHTTPServer(('127.0.0.1',BRIDGE_PORT),GeoAuditHandler)
+    try: server=http.server.ThreadingHTTPServer(('127.0.0.1',0),GeoAuditHandler)
     except Exception as exc:
         print('\nERROR: GeoAudit Studio could not start:'); print(exc); input('\nPress Enter to close...'); raise SystemExit(1)
-    port=server.server_address[1]; url=GITHUB_APP_URL
+    port=server.server_address[1]; url=f'http://127.0.0.1:{port}/'
     print('='*62); print('        GeoAudit Studio - V35 SILENT AUTO IMPORT'); print('='*62)
-    print(f'GeoAudit Web: {url}'); print(f'Local Bridge API: http://127.0.0.1:{port}')
+    print(f'GeoAudit: {url}')
     print('CAD: download -> auto attach #attach_cad_img | SHP: download -> auto attach #shapefile_upload')
     print('No extension, no file picker, no WinForms/UI Automation.')
     print('='*62)
-    # GitHub-only mode:
-    # Do not open a second/local GeoAudit window.
-    # Keep this process as the local bridge API only.
-    print('[GeoAudit] Bridge ready. Open the GitHub Pages app in your browser:')
-    print(GITHUB_APP_URL)
+    def open_windows():
+        ok=launch_chromium_controlled_browser(url)
+        if not ok:
+            print('[GeoAudit] Automatic attachment requires Edge or Chrome opened by GeoAudit.')
+            webbrowser.open(url)
+    threading.Timer(0.7, open_windows).start()
     try: server.serve_forever(poll_interval=.25)
     except KeyboardInterrupt: print('\nStopping GeoAudit Studio...')
     finally: server.server_close()
