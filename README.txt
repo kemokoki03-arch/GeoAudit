@@ -1,13 +1,6 @@
-GeoAudit Bridge - Windows
-=========================
-1) فك الضغط.
-2) شغل START_GeoAudit_Bridge.bat
-3) يفتح موقع العمل + GeoAudit GitHub في نفس بروفايل المتصفح.
-4) اترك النافذة السوداء مفتوحة أثناء العمل.
+GeoAudit Bridge - GitHub Only
 
-الرابط:
-https://kemokoki03-arch.github.io/GeoAudit/
-
-الـBridge محلي فقط على:
-http://127.0.0.1:64819
-ولا يتم فتحه على الشبكة الخارجية.
+1) Run START_BRIDGE_ONLY.bat
+2) Leave the window open.
+3) Open: https://kemokoki03-arch.github.io/GeoAudit/
+The bridge will NOT open a second/local GeoAudit page.

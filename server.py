@@ -1943,12 +1943,11 @@ def main():
     print('CAD: download -> auto attach #attach_cad_img | SHP: download -> auto attach #shapefile_upload')
     print('No extension, no file picker, no WinForms/UI Automation.')
     print('='*62)
-    def open_windows():
-        ok=launch_chromium_controlled_browser(url)
-        if not ok:
-            print('[GeoAudit] Automatic attachment requires Edge or Chrome opened by GeoAudit.')
-            webbrowser.open(url)
-    threading.Timer(0.7, open_windows).start()
+    # GitHub-only mode:
+    # Do not open a second/local GeoAudit window.
+    # Keep this process as the local bridge API only.
+    print('[GeoAudit] Bridge ready. Open the GitHub Pages app in your browser:')
+    print(GITHUB_APP_URL)
     try: server.serve_forever(poll_interval=.25)
     except KeyboardInterrupt: print('\nStopping GeoAudit Studio...')
     finally: server.server_close()
