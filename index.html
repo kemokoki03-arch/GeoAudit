@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#07151b" />
+  <title>GeoAudit Studio</title>
+  <link rel="icon" href="favicon.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark">G</div>
+        <div>
+          <div class="brand-title">GeoAudit Studio</div>
+          <div class="brand-sub">مراجعة الأراضي والرفع المساحي</div>
+        </div>
+      </div>
+
+      <div class="top-actions">
+        <label class="basemap-select-wrap">
+          <span>الخريطة</span>
+          <select id="basemapSelect">
+            <option value="google" selected>Google Earth Satellite</option>
+            <option value="esri">Esri Satellite</option>
+            <option value="osm">OpenStreetMap</option>
+            <option value="carto">Carto Light</option>
+          </select>
+        </label>
+        <button class="ghost-btn" id="fitAllBtn" title="تكبير كل الطبقات">⛶ <span>عرض الكل</span></button>
+        <button class="primary-btn" id="uploadBtn">＋ إضافة ملفات</button>
+        <input id="fileInput" type="file" accept=".zip,.rar,.shp,.shx,.dbf,.prj,.cpg,.xlsx,.xls,.csv,.geojson,.json" multiple hidden />
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="side-panel inspector-panel">
+        <div class="drawer-mini-head"><div class="drawer-title">القائمة</div><button class="drawer-close" id="closeInspectorDrawer" type="button">×</button></div>
+        <div class="runtime-hidden" aria-hidden="true">
+          <span id="statLayers">0</span><span id="statFeatures">0</span><span id="statPoints">0</span>
+          <input id="toleranceInput" type="number" value="0.10" />
+          <button id="recheckBtn" type="button"></button>
+        </div>
+
+        <section class="panel-section collapsible-section">
+          <div class="section-head section-toggle" data-section-toggle><h3>الإحداثيات</h3><div class="section-head-right"><span class="badge">UTM</span><button class="collapse-chip" type="button">▾</button></div></div>
+          <div class="section-body">
+            <div class="two-cols">
+              <label><span>Zone</span><select id="utmZone"><option>35</option><option selected>36</option><option>37</option></select></label>
+              <label><span>Hemisphere</span><select id="utmHemi"><option selected value="N">North</option><option value="S">South</option></select></label>
+            </div>
+            <p class="hint">الزون المسموح فقط 35 أو 36 أو 37. ملف الجيوديسي يحدد الـZone تلقائيًا إن كان مكتوبًا داخله.</p>
+          </div>
+        </section>
+
+        <section class="panel-section collapsible-section">
+          <div class="section-head section-toggle" data-section-toggle><h3>أدوات المراجعة</h3><div class="section-head-right"><button class="collapse-chip" type="button">▾</button></div></div>
+          <div class="section-body">
+            <div class="tool-grid">
+              <button class="tool-card activeable" id="northToggle"><b>↥</b><span>اتجاه البحري</span><small id="northBearingText">غير محدد</small></button>
+              <button class="tool-card activeable" id="moveToolBtn"><b>✥</b><span>تحريك بصري</span><small>مقارنة فقط</small></button>
+              <button class="tool-card activeable" id="editGeometryBtn"><b>✂</b><span>قص متقدم</span><small>اختياري · التحديد العادي بالنقر</small></button>
+              <button class="tool-card" id="areaCalcBtn"><b>㎡</b><span>حاسبة المساحة</span><small>فدان / قيراط</small></button>
+              <button class="tool-card smart-hidden" id="smartDescBtn"><b>✦</b><span>الوصف الذكي</span><small>صياغة تلقائية</small></button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-section export-section collapsible-section">
+          <div class="section-head section-toggle" data-section-toggle><h3>التصدير</h3><div class="section-head-right"><button class="collapse-chip" type="button">▾</button></div></div>
+          <div class="section-body">
+            <div class="export-grid">
+              <button data-export="png"><span>PNG</span><small>CAD نظيف + سهم شمال</small></button>
+              <button data-export="dxf"><span>DXF</span><small>AutoCAD</small></button>
+              <button data-export="kml"><span>KML</span><small>Google Earth</small></button>
+              <button data-export="shp"><span>SHP</span><small>المحدد فقط إن وُجد</small></button>
+            </div>
+            <div class="cad-controls cad-controls-inner-only">
+              <button id="previewCadBtn" class="ghost-btn slim-btn">معاينة صورة الأوتوكاد</button>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <section class="map-stage" id="mapStage">
+        <div id="map"></div>
+
+        <div class="drop-overlay" id="dropOverlay">
+          <div class="drop-box">
+            <div class="drop-icon">⇪</div>
+            <h3>اترك الملفات هنا</h3>
+            <p>ZIP/RAR Shapefile · Excel · CSV · GeoJSON</p>
+          </div>
+        </div>
+
+        <div class="map-toolbar">
+          <button id="zoomInBtn">＋</button>
+          <button id="zoomOutBtn">−</button>
+          <button id="homeBtn">⌂</button>
+        </div>
+
+        <div class="drawer-backdrop" id="drawerBackdrop"></div>
+        <div class="floating-menu-stack floating-menu-left">
+          <button id="inspectorMenuBtn" class="menu-fab" type="button"><span class="menu-fab-icon">☰</span><span class="menu-fab-label">القائمة</span></button>
+        </div>
+        <div class="floating-menu-stack floating-menu-right">
+          <button id="layersMenuBtn" class="menu-fab" type="button"><span class="menu-fab-icon">☰</span><span class="menu-fab-label">الطبقات</span></button>
+          <button id="reviewMenuBtn" class="menu-fab review-menu-fab" type="button"><span class="menu-fab-icon">✓</span><span class="menu-fab-label">الطلبات</span><span class="review-count-badge" id="reviewQueueBadge">0</span></button>
+        </div>
+
+        <div class="coords-chip" id="coordsChip">Lat — · Lng —</div>
+
+        <div class="move-banner" id="moveBanner">
+          <b>وضع التحريك البصري نشط</b>
+          <span>حدد طبقة من القائمة ثم اسحب على الخريطة. التصدير يبقى بالإحداثيات الأصلية.</span>
+          <button id="undoMoveBtn">تراجع</button><button id="resetMoveBtn">الأصل</button><button id="exitMoveBtn">إنهاء</button>
+        </div>
+
+        <div class="edit-banner" id="editBanner">
+          <b>تحرير شكل التصدير</b>
+          <span id="editStatusText">اضغط على أي قطعة لتحديدها، ثم اختر الإجراء.</span>
+          <div class="edit-actions">
+            <button id="drawCutBtn">رسم منطقة قص</button>
+            <button id="excludeSelectedBtn">استبعاد المحدد</button>
+            <button id="keepSelectedBtn">فقط المحدد</button>
+            <button id="undoEditBtn">تراجع</button>
+            <button id="resetEditBtn">الأصل</button>
+            <button id="exitEditBtn">إنهاء</button>
+          </div>
+        </div>
+
+        <div class="cut-decision" id="cutDecision">
+          <b>تم رسم منطقة القص</b>
+          <span>اختار ماذا تريد أن تحتفظ به في التصدير.</span>
+          <button id="keepInsideCutBtn">احتفظ بالداخل</button>
+          <button id="removeInsideCutBtn">احذف الداخل</button>
+          <button id="cancelCutBtn">إلغاء</button>
+        </div>
+      </section>
+
+      <aside class="side-panel layers-panel">
+        <div class="drawer-mini-head"><div class="drawer-title">الطبقات</div><button class="drawer-close" id="closeLayersDrawer" type="button">×</button></div>
+        <div class="layers-head">
+          <div>
+            <div class="mini-label">LAYERS</div>
+            <h3>الطبقات</h3>
+          </div>
+          <div class="layer-head-actions">
+            <button id="restoreDeletedBtn" class="icon-btn" title="استرجاع آخر مسح · Shift+Z">↶</button>
+            <button id="clearAllBtn" class="icon-btn danger-icon" title="مسح الشيب فايل والنقاط · Shift+S">⌫</button>
+          </div>
+        </div>
+
+        <div id="layerList" class="layer-list">
+          <div class="empty-state" id="emptyLayers">
+            <div class="empty-graphic">◇</div>
+            <b>لا توجد طبقات بعد</b>
+            <span>ارفع Shapefile أو Excel لبدء المراجعة.</span>
+          </div>
+        </div>
+
+        <div class="import-card" id="importCard">
+          <div>
+            <b>استيراد بيانات</b>
+            <span>اسحب الملفات هنا أو اضغط للاختيار</span>
+          </div>
+          <div class="formats">SHP · ZIP · RAR · XLSX · CSV · GEOJSON</div>
+        </div>
+      </aside>
+
+      <aside class="side-panel review-panel" id="reviewPanel">
+        <div class="drawer-mini-head">
+          <div>
+            <div class="drawer-title">طلبات المراجعة</div>
+            <div class="review-mini-status" id="reviewMiniStatus">غير مسجل</div>
+          </div>
+          <button class="drawer-close" id="closeReviewDrawer" type="button">×</button>
+        </div>
+
+        <div class="review-login" id="reviewLoginBox">
+          <div class="review-login-brand">
+            <div class="review-login-icon">✓</div>
+            <div><b>نظام مراجعة الطلبات</b><span>نفس حساب النظام الأصلي</span></div>
+          </div>
+          <label class="review-field"><span>اسم المستخدم</span><input id="reviewUsername" autocomplete="username" placeholder="اسم المستخدم"></label>
+          <label class="review-field"><span>كلمة المرور</span><input id="reviewPassword" type="password" autocomplete="current-password" placeholder="••••••••"></label>
+          <button id="reviewLoginBtn" class="review-primary-btn" type="button">تسجيل الدخول</button>
+          <div id="reviewLoginError" class="review-inline-error" aria-live="polite"></div>
+          <button id="reviewOpenFullBtn" class="review-link-btn" type="button">فتح النظام الكامل داخل البرنامج</button>
+        </div>
+
+        <div class="review-workspace hidden" id="reviewWorkspace">
+          <div class="review-user-row">
+            <div><b id="reviewUserName">—</b><span id="reviewUserRole">—</span></div>
+            <div class="review-user-actions"><button id="reviewRefreshBtn" type="button">↻</button><button id="reviewLogoutBtn" type="button">خروج</button></div>
+          </div>
+
+          <div class="review-progress-card">
+            <div><span>المتبقي</span><b id="reviewPendingCount">0</b></div>
+            <div class="review-date-cell">
+              <span>طلبات يوم</span>
+              <div class="review-date-row">
+                <input id="reviewDatePicker" type="date" aria-label="اختيار تاريخ الطلبات">
+                <button id="reviewTodayBtn" type="button" title="طلبات اليوم">اليوم</button>
+              </div>
+              <b id="reviewActiveDate" class="review-date-display">—</b>
+            </div>
+          </div>
+
+          <div class="review-current-card" id="reviewCurrentCard">
+            <div class="review-current-top">
+              <span class="review-kicker">الطلب الحالي</span>
+              <div class="review-current-top-right"><span id="reviewCurrentStatus" class="review-status-badge status-unreviewed">لم يتم المراجعة</span><span id="reviewCurrentIndex">—</span></div>
+            </div>
+            <div class="review-order-line">
+              <div class="review-order-number" id="reviewCurrentOrder">لا توجد طلبات</div>
+              <button id="reviewCopyCurrentBtn" class="review-copy-btn" type="button" title="نسخ رقم الطلب">⧉ <span>نسخ</span></button>
+            </div>
+            <div class="review-meta-grid">
+              <div><span>الشركة</span><b id="reviewCurrentCompany">—</b></div>
+              <div><span>المراجع</span><b id="reviewCurrentReviewer">—</b></div>
+            </div>
+            <div class="review-reason-row hidden" id="reviewCurrentReasonRow"><span>سبب الرفض</span><b id="reviewCurrentReason">—</b></div>
+            <div class="review-decision-label">قرار المراجعة</div>
+            <div class="review-status-actions" id="reviewStatusActions">
+              <button id="reviewAcceptBtn" class="review-status-action accept" type="button" data-review-status="مقبول">✓ مقبول</button>
+              <button id="reviewRejectBtn" class="review-status-action reject" type="button" data-review-status="مرفوض">✕ مرفوض</button>
+              <button id="reviewHoldBtn" class="review-status-action hold" type="button" data-review-status="معلق">⏸ معلق</button>
+              <button id="reviewQcBtn" class="review-status-action qc" type="button" data-review-status="Qc">Qc</button>
+            </div>
+            <div class="review-reject-box hidden" id="reviewRejectBox">
+              <div class="review-reason-title" id="reviewReasonTitle">سبب القرار</div>
+              <textarea id="reviewRejectReason" rows="3" placeholder="اكتب السبب..."></textarea>
+              <div class="review-reject-actions"><button id="reviewRejectCancelBtn" type="button">إلغاء</button><button id="reviewRejectConfirmBtn" type="button">إضافة التعليق</button></div>
+            </div>
+            <div id="reviewActionStatus" class="review-action-status" aria-live="polite"></div>
+          </div>
+
+          <div class="review-queue-head"><b>كل الطلبات</b><span id="reviewQueueSummary">0 طلب</span></div>
+          <div class="review-queue-list" id="reviewQueueList"></div>
+          <button id="reviewOpenFullBtn2" class="review-link-btn review-full-bottom" type="button">فتح النظام الكامل</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <div id="toastHost" class="toast-host"></div>
+
+
+  <div class="modal-backdrop" id="styleModal">
+    <div class="modal modal-small">
+      <div class="modal-head">
+        <div><div class="mini-label">LAYER STYLE</div><h3 id="styleLayerTitle">تنسيق الطبقة</h3></div>
+        <button class="close-modal" data-close="styleModal">×</button>
+      </div>
+      <div class="style-form">
+        <label><span>لون الحدود / الخط</span><input id="styleStroke" type="color" value="#6f879b"></label>
+        <label><span>لون التعبئة / النقطة</span><input id="styleFill" type="color" value="#6f879b"></label>
+        <label><span>شفافية التعبئة <b id="styleOpacityText">7%</b></span><input id="styleOpacity" type="range" min="0" max="1" step="0.01" value="0.07"></label>
+        <label><span>سمك الحدود <b id="styleWeightText">2</b></span><input id="styleWeight" type="range" min="1" max="8" step="0.5" value="2"></label>
+        <label><span>حجم النقطة <b id="styleRadiusText">5.5</b></span><input id="styleRadius" type="range" min="2" max="14" step="0.5" value="5.5"></label>
+      </div>
+      <div class="modal-actions">
+        <button id="styleResetBtn" class="secondary-btn">إعدادات افتراضية</button>
+        <button id="styleApplyBtn" class="primary-btn">تطبيق</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="attributeModal">
+    <div class="modal modal-wide">
+      <div class="modal-head">
+        <div><div class="mini-label">ATTRIBUTE TABLE</div><h3 id="attributeTitle">جدول البيانات</h3></div>
+        <button class="close-modal" data-close="attributeModal">×</button>
+      </div>
+      <div class="modal-tools">
+        <input id="attributeSearch" placeholder="بحث داخل الجدول..." />
+        <span id="attributeCount"></span>
+      </div>
+      <div class="table-wrap"><table id="attributeTable"></table></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="moveModal">
+    <div class="modal modal-small">
+      <div class="modal-head">
+        <div><div class="mini-label">VISUAL ALIGNMENT</div><h3>اختيار طبقات التحريك</h3></div>
+        <button class="close-modal" data-close="moveModal">×</button>
+      </div>
+      <p class="modal-note">هذه الأداة تغير العرض فقط ولا تعدّل الإحداثيات المصدرية.</p>
+      <div id="moveLayerChoices" class="choice-list"></div>
+      <div class="modal-actions">
+        <button class="secondary-btn" id="resetOffsetsBtn">إرجاع الأصل</button>
+        <button class="primary-btn" id="startMoveBtn">بدء التحريك</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="areaModal">
+    <div class="modal modal-small">
+      <div class="modal-head">
+        <div><div class="mini-label">AREA CONVERTER</div><h3>حاسبة المساحة</h3></div>
+        <button class="close-modal" data-close="areaModal">×</button>
+      </div>
+      <label class="field-label">المساحة بالمتر المربع</label>
+      <input id="areaInput" class="big-input" type="number" step="0.01" placeholder="مثال: 4200" />
+      <button id="pickLargestAreaBtn" class="secondary-btn full">استخدام أكبر قطعة ظاهرة</button>
+      <div class="result-cards">
+        <div><span>فدان</span><b id="fedResult">0</b></div>
+        <div><span>قيراط</span><b id="kiratResult">0</b></div>
+        <div><span>سهم</span><b id="sahmResult">0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="smartModal">
+    <div class="modal modal-medium">
+      <div class="modal-head">
+        <div><div class="mini-label">SMART DESCRIPTION</div><h3>الوصف الذكي</h3></div>
+        <button class="close-modal" data-close="smartModal">×</button>
+      </div>
+      <div class="segmented" id="descType">
+        <button class="selected" data-type="land">أرض</button><button data-type="building">أرض ومبانٍ</button>
+      </div>
+      <div class="form-grid">
+        <label><span>اسم / رقم القطعة</span><input id="descParcelName" placeholder="مثال: القطعة رقم 18" /></label>
+        <label><span>المساحة الكلية م²</span><input id="descLandArea" type="number" step="0.01" /></label>
+        <label><span>مساحة الطريق م²</span><input id="descRoadArea" type="number" step="0.01" value="0" /></label>
+        <label><span>المساحة المطلوب تقنينها م²</span><input id="descLegalizeArea" type="number" step="0.01" /></label>
+        <label class="full-span"><span>وصف الحدود / الموقع</span><textarea id="descLocation" rows="3" placeholder="مثال: يحدها من البحري طريق بعرض ..."></textarea></label>
+        <label class="full-span building-only"><span>المباني والملحقات</span><textarea id="descBuildings" rows="3" placeholder="مثال: مبنى سكني دور أرضي بمسطح ..."></textarea></label>
+      </div>
+      <div class="smart-actions">
+        <button id="useLargestForDesc" class="secondary-btn">استخدام أكبر قطعة</button>
+        <button id="generateDescBtn" class="primary-btn">إنشاء الوصف</button>
+      </div>
+      <textarea id="descOutput" class="output-box" rows="7" readonly placeholder="سيظهر الوصف هنا..."></textarea>
+      <button id="copyDescBtn" class="secondary-btn full">نسخ الوصف</button>
+    </div>
+  </div>
+
+
+  <div class="modal-backdrop cad-export-backdrop" id="cadPreviewModal">
+    <section class="cad-export-modal" role="dialog" aria-modal="true" aria-labelledby="cadExportTitle">
+      <header class="cad-export-head">
+        <button class="cad-x" id="cadCancelBtn" type="button" aria-label="إغلاق">×</button>
+        <div class="cad-head-copy">
+          <h2 id="cadExportTitle">تصدير صورة الأوتوكاد</h2>
+          <p>رسم أبيض وأسود مع سهم شمال — أنت تحدد مكان الترميز والتهشير بنفسك</p>
+        </div>
+        <div class="cad-head-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="2"/><path d="M4 11H17V24M11 4V17H24" stroke="currentColor" stroke-width="2"/><path d="M11 11L17 17" stroke="currentColor" stroke-width="2"/></svg></div>
+      </header>
+
+      <div class="cad-config">
+        <div class="cad-mode-tabs" id="cadModeTabs" aria-label="نمط الإشغالات">
+          <button type="button" data-cad-mode="symbol">ترميز</button>
+          <button type="button" data-cad-mode="hatch" class="active">تهشير</button>
+          <button type="button" data-cad-mode="both">ترميز + تهشير</button>
+        </div>
+
+        <div class="cad-config-card" id="cadSymbolPanel">
+          <div class="cad-config-title">
+            <div class="cad-pencil">✎</div>
+            <div><b>كتابة ترميز</b><small>قبل ثم اضغط مكان الترميز</small></div>
+          </div>
+          <input id="cadSymbolText" class="cad-symbol-input" type="text" value="إشغال" placeholder="اكتب كلمة الترميز أو الحرف">
+          <div class="cad-letter-tools">
+            <div class="cad-letter-caption">حروف سريعة — اضغط على الحرف ثم اضغط داخل المعاينة</div>
+            <div class="cad-letter-palette" id="cadLetterPalette"><button type="button" data-letter="A">A</button><button type="button" data-letter="B">B</button><button type="button" data-letter="C">C</button><button type="button" data-letter="D">D</button><button type="button" data-letter="E">E</button><button type="button" data-letter="F">F</button><button type="button" data-letter="G">G</button><button type="button" data-letter="H">H</button><button type="button" data-letter="I">I</button><button type="button" data-letter="J">J</button><button type="button" data-letter="K">K</button><button type="button" data-letter="L">L</button><button type="button" data-letter="M">M</button><button type="button" data-letter="N">N</button><button type="button" data-letter="O">O</button><button type="button" data-letter="P">P</button><button type="button" data-letter="Q">Q</button><button type="button" data-letter="R">R</button><button type="button" data-letter="S">S</button><button type="button" data-letter="T">T</button><button type="button" data-letter="U">U</button><button type="button" data-letter="V">V</button><button type="button" data-letter="W">W</button><button type="button" data-letter="X">X</button><button type="button" data-letter="Y">Y</button><button type="button" data-letter="Z">Z</button></div>
+            <div class="cad-letter-actions">
+              <span id="cadMarkerModeLabel" class="cad-marker-mode">اختر حرفًا أو اكتب النص ثم اضغط داخل المعاينة</span>
+              <div>
+                <button id="cadUndoMarkerBtn" type="button" class="tiny-ghost">↶ آخر حرف</button>
+                <button id="cadClearMarkersBtn" type="button" class="tiny-ghost danger">مسح الحروف</button>
+              </div>
+            </div>
+          </div>
+          <p class="cad-help">أي حرف أو ترميز تضيفه سيظهر داخل المعاينة نفسها وداخل صورة التصدير.</p>
+
+          <div class="cad-control-row">
+            <span>حجم الخط <small>(يطبق على الكل)</small></span>
+            <div class="cad-stepper">
+              <button id="cadFontPlus" type="button">+</button>
+              <input id="cadFontSize" type="number" min="12" max="72" value="28" aria-label="حجم الخط">
+              <button id="cadFontMinus" type="button">−</button>
+              <em>px</em>
+            </div>
+          </div>
+
+          <label class="cad-slider-row">
+            <span>سمك الخطوط <b id="cadLineWidthLabel">×1.0</b></span>
+            <input id="cadLineWidth" type="range" min="0.6" max="3" step="0.1" value="1">
+          </label>
+        </div>
+
+        <div class="cad-config-card cad-hatch-card" id="cadHatchPanel">
+          <div class="cad-config-title">
+            <div class="cad-pencil">▧</div>
+            <div><b>إعداد التهشير</b><small>التهشير يدوي — اختر بنفسك المنطقة من داخل المعاينة</small></div>
+          </div>
+          <div class="cad-manual-hatch-tools">
+            <button id="cadPickHatchBtn" type="button" class="cad-pick-hatch-btn">⌖ اختيار أماكن التهشير</button>
+            <button id="cadClearHatchBtn" type="button" class="tiny-ghost danger">مسح التهشير</button>
+            <span id="cadHatchModeLabel" class="cad-hatch-mode-label">لا توجد مناطق مهشرة</span>
+          </div>
+          <div class="cad-control-row compact">
+            <span>كثافة التهشير</span>
+            <div class="cad-stepper short">
+              <button id="cadHatchDensePlus" type="button">+</button>
+              <input id="cadHatchSpacing" type="number" min="8" max="40" value="18" aria-label="مسافة التهشير">
+              <button id="cadHatchDenseMinus" type="button">−</button>
+              <em>px</em>
+            </div>
+          </div>
+          <label class="cad-slider-row">
+            <span>زاوية التهشير <b id="cadHatchAngleLabel">45°</b></span>
+            <input id="cadHatchAngle" type="range" min="0" max="180" step="5" value="45">
+          </label>
+        </div>
+      </div>
+
+      <div class="cad-preview-stage">
+        <div class="cad-preview-viewport" id="cadPreviewViewport">
+          <img id="cadPreviewImage" alt="معاينة صورة الأوتوكاد">
+          <div id="cadMarkerOverlay" class="cad-marker-overlay" aria-label="الرموز القابلة للتحريك"></div>
+          <div class="cad-preview-loading" id="cadPreviewLoading">جاري تجهيز الرسم…</div>
+          <div class="cad-preview-tools" aria-label="أدوات تكبير المعاينة">
+            <button id="cadPreviewZoomIn" type="button" title="تكبير">+</button>
+            <button id="cadPreviewReset" type="button" title="إرجاع العرض">⌂</button>
+            <button id="cadPreviewZoomOut" type="button" title="تصغير">−</button>
+          </div>
+          <div class="cad-zoom-readout" id="cadZoomReadout">100%</div>
+        </div>
+      </div>
+
+      <footer class="cad-export-footer">
+        <button class="cad-cancel-btn" type="button" data-close="cadPreviewModal">إلغاء</button>
+        <div class="cad-footer-left">
+          <span class="cad-send-status" id="cadSendStatus">جاهز للتنزيل</span>
+          <button id="sendCadBtn" class="cad-send-btn" type="button"><span>↓</span> تنزيل صورة الكاد</button>
+        </div>
+      </footer>
+    </section>
+  </div>
+
+  <div class="review-full-modal" id="reviewFullModal">
+    <div class="review-full-shell">
+      <div class="review-full-head"><b>نظام مراجعة الطلبات الكامل</b><button id="reviewFullCloseBtn" type="button">×</button></div>
+      <iframe id="reviewFullFrame" title="نظام مراجعة الطلبات" src="about:blank"></iframe>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/shpjs@4.0.4/dist/shp.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/proj4@2.11.0/dist/proj4.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://unpkg.com/@mapbox/shp-write@latest/shpwrite.js"></script>
+  <script src="https://unpkg.com/dom-to-image-more@3.3.0/dist/dom-to-image-more.min.js"></script>
+  <script src="bridge-config.js"></script>
+  <script src="app.js"></script>
+  <script src="review-integration.js"></script>
+</body>
+</html>

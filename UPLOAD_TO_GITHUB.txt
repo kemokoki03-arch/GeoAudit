@@ -1,0 +1,8 @@
+GeoAudit GitHub Web
+===================
+ارفع محتويات هذا المجلد مباشرة إلى جذر Repository: GeoAudit
+ثم فعّل GitHub Pages من main / root.
+الرابط المتوقع:
+https://kemokoki03-arch.github.io/GeoAudit/
+
+ملحوظة: وظائف الربط المحلي مع landsurvey تحتاج تشغيل GeoAudit Bridge على جهاز المستخدم.
